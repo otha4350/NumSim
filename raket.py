@@ -1,13 +1,7 @@
-import numpy
+import numpy as np
 import scipy
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-
-pos = (0,0)
-goal = (70,60)
-
-c = 0.05
-k = 700
 
 # m(t)a(t) = F + m'(t)u(t)
 # F = m(t)g - c ||v(t)||v(t)
@@ -16,8 +10,6 @@ k = 700
 # v för hastighet
 # c för luftmotståndskonstant
 # k för hastighet för bränslepartiklar
-positions = []
-prev_t = 0
 def f(t, u, c, k, theta_m): #vår a(t)
     px, py, vx, vy = u
 
@@ -27,97 +19,114 @@ def f(t, u, c, k, theta_m): #vår a(t)
 
     g1, g2 = g
     
-    #F = m * g - c * numpy.abs(v) * v
-    F1, F2 = (m * g1 - c * numpy.abs(vx) * vx, m * g2 - c * numpy.abs(vy) * vy)
+    #F = m * g - c * np.abs(v) * v
+    F1, F2 = (m * g1 - c * np.abs(vx) * vx, m * g2 - c * np.abs(vy) * vy)
     
     #naiv lösning
-    # theta = -(numpy.pi / 2) if pos[1] < 20 else numpy.arctan2( goal[1] - pos[1], goal[0] - pos[0] ) + numpy.pi
+    # theta = -(np.pi / 2) if pos[1] < 20 else np.arctan2( goal[1] - pos[1], goal[0] - pos[0] ) + np.pi
 
-    theta = -(numpy.pi / 2) if py < 20 else theta_m
+    theta = -(np.pi / 2) if py < 20 else theta_m
 
-    u1, u2 = (k * numpy.cos(theta), k * numpy.sin(theta))
+    u1, u2 = (k * np.cos(theta), k * np.sin(theta))
 
     return (vx, vy,(F1 + mprim * u1) / m, (F2 + mprim * u2) / m)
 
-t0 = 0.0 # starttid
-t1 = 45.0 # sluttid
-tspan = (t0, t1)
+def runge_kutta(f, t, u_0, args):
+    u = np.zeros((len(t),len(u_0)))
+    u[0] = u_0
+    for i in range(len(t)-1):
+        K1 = f(t[i], u[i], *args)
+
+        K2 = f(t[i+1], u[i] + np.multiply(K1, h), *args)
+
+        u[i+1] = u[i] + (h/2) * (np.add(K1,K2))
+    return u
+
+def find_best_theta():
+    min_theta = 0
+    max_theta = 2 * np.pi
+
+    #undersök olika värden med ökande precision
+    for _ in range(4):
+        step = (max_theta - min_theta) / 10
+        thetas_to_examine = np.arange(min_theta,max_theta,step)
+        min_distance = 1000
+
+        for t in thetas_to_examine:
+            #ingen max_step så funktionen är snabb men lite grov
+            sol = scipy.integrate.solve_ivp(f,t_span, u_0, method="RK45", args=(c,k,t))
+
+            positions = zip(sol.y[0], sol.y[1])
+            goal_x, goal_y = goal
+            distances = [np.sqrt((x - goal_x)**2 + (y - goal_y)**2) for x,y in positions]
+
+            if min(distances) < min_distance:
+                min_distance = min(distances)
+                best_theta = t
+        #nästa range att undersöka
+        min_theta = best_theta - step 
+        max_theta = best_theta + step
+
+    print("best theta:",best_theta)
+    return best_theta
+            
+goal = (70,60)
+
+c = 0.05
+k = 700
+
+t_0 = 0.0 # starttid
+t_1 = 45.0 # sluttid
 h = 0.1
-t_range = numpy.arange(t0,t1,h)
-u_0 = [0,0,0,0]
+t_span = (t_0, t_1)
+t_range = np.arange(t_0,t_1,h)
+u_0 = [0,0,0,0] #x, y, vx, vy
 
+theta_m = find_best_theta()
 
-u = [u_0]
-for i, t in enumerate(t_range[:-1]):
-    K1 = f(t, u[i], c , k, 110)
+#hitta lösningar
+rk_solution = runge_kutta(f,t_range,u_0, (c,k,theta_m))
 
-    K2 = f(t_range[i+1], numpy.add(u[i], numpy.multiply(K1, h)) , c , k, 110)
+ivp_solution = scipy.integrate.solve_ivp(f,t_span, u_0, method="RK45", args=(c,k,theta_m), max_step = h)
 
-    u.append(numpy.add(u[i], (h/2) * (numpy.add(K1,K2))))
-
-best_theta = 0
-best_min_goal_dist = 1000
-for deg in numpy.arange(343.5,344.5,0.01):
-    print(deg)
-    theta_m = deg
-
-    sol = scipy.integrate.solve_ivp(f,tspan, u_0, method="RK45", args=(c,k,theta_m), max_step = h)
-    pxs = sol.y[0]
-    pys = sol.y[1]
-
-    min_goal_dist = 1000
-
-    px, py = pxs[-1], pys[-1]
-    goal_dist = numpy.sqrt((px - goal[0])**2 + (py - goal[1])**2)
-    
-    if goal_dist < min_goal_dist:
-        min_goal_dist = goal_dist
-    
-    if min_goal_dist < best_min_goal_dist:
-        best_min_goal_dist = min_goal_dist
-        best_theta = theta_m
-
-print("best theta:", best_theta)
-
-sol = scipy.integrate.solve_ivp(f,tspan, u_0, method="RK45", args=(c,k,best_theta), max_step = h)
-    
-
-
-
-# fig, ((axes, ax1), (ax2, ax3)) = plt.subplots(2,2)
+#starta upp animation
 fig, axes = plt.subplots()
-aim = axes.plot((0,0) ,"r", linestyle = "-")
-accurate_aim = axes.plot((0,0) ,"b", linestyle = "-")
+axes.set(xlim=[-100, 700], ylim=[0, 800])
 
-scat = axes.plot(0, 0, "b.")
-accurate = axes.plot(0, 0, "g.")
+#plotta rk_solution
+rk_tail = axes.plot((0,0) ,"r", linestyle = "-")
+rk_artist = axes.plot(0, 0, "b.", label="Vår Runge-Kutta")
 
-rockets = [scat, accurate]
-tails = [aim, accurate_aim]
+#plotta ivp_solution
+ivp_tail = axes.plot((0,0) ,"b", linestyle = "-")
+ivp_artist = axes.plot(0, 0, "g.", label="Inbyggd lösare")
 
-goal = axes.plot(goal[0], goal[1], "rx")
+artists = [rk_artist, ivp_artist]
+tails = [rk_tail, ivp_tail]
 
+goal = axes.plot(goal[0], goal[1], "rx", label="Mål")
 
+axes.legend()
 
-axes.set(xlim=[-100, 100], ylim=[-100, 800])
+#update funktionen definierar hur animationen ser ut
 def update(frame):
-    positions = [(u[frame][0], u[frame][1]), (sol.y[0][frame], sol.y[1][frame])]
+    #vår lösares positioner och solve_ivps positioner har olika "shape"
+    rk_position = (rk_solution[frame][0], rk_solution[frame][1])
+    ivp_position = (ivp_solution.y[0][frame], ivp_solution.y[1][frame])
 
+    positions = [rk_position, ivp_position]
     
-    for rocket, tail, pos  in zip(rockets, tails, positions):
+    #animerar båda raketerna
+    for artist, tail, pos  in zip(artists, tails, positions):
         px, py = pos
 
-        rocket[0].set_data(px, py)
+        artist[0].set_data(px, py)
 
-        theta = -(numpy.pi / 2) if py < 20 else numpy.arctan2( 60 - py, 80 - px ) + numpy.pi
+        theta = -(np.pi / 2) if py < 20 else theta_m
 
-        rx, ry = (px + 10 *numpy.cos(theta), py + 5 * numpy.sin(theta))
+        rx, ry = (px + 10 *np.cos(theta), py + 10 * np.sin(theta))
         tail[0].set_data([(px,rx),(py,ry)])
 
-    return scat
+ani = animation.FuncAnimation(fig = fig, func = update, interval = 1, frames = range(len(t_range)))
 
-ani = animation.FuncAnimation(fig = fig, func = update, interval = 1, repeat = True)
-
-# axes.plot(sol.y[1])
-# ax2.plot(rk_positions)
 plt.show()
