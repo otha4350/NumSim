@@ -2,7 +2,7 @@ import numpy as np
 import scipy
 import matplotlib.pyplot as plt
 
-def f(t,y, beta, gamma):
+def f(t, y, beta, gamma):
     s, i, r = y
     n = sum(y)
 
