@@ -39,7 +39,7 @@ gamma = 1/14
 alpha = 1/4
 mu = 1/40
 v = 1
-misinformation = 0.01
+misinformation = 0.15
 v1Effectiveness = 0.5
 v2Effectiveness = 0.9
 vaccineIncubationTime = 1/2
@@ -106,7 +106,7 @@ def prop(X, coeff):
         gamma * v2infected, #v2infected -> recovered
         (1-v2Effectiveness) * mu * infected, #v2infected -> deceased
         v2Effectiveness * vaccinated2, #vaccinated2 -> vaxximmune
-        misinformation * susceptible, #sus->antivax
+        misinformation * (antivaxx/n) * susceptible, #sus->antivax
         beta * (totalinfected/n) * antivaxx, #antivax->exposed
     ])
 
